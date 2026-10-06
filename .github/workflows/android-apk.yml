@@ -19,7 +19,6 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
-      - uses: android-actions/setup-android@v3
       - name: Install native Capacitor dependencies
         run: >-
           npm install --prefix deps --no-package-lock
