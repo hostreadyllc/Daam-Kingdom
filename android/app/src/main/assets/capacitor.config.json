@@ -1,0 +1,29 @@
+{
+	"appId": "com.hostready.daamkingdom",
+	"appName": "Daam Kingdom",
+	"webDir": "native-shell",
+	"server": {
+		"url": "https://daam-kingdom.hostreadyllc.chatgpt.site",
+		"cleartext": false,
+		"allowNavigation": [
+			"daam-kingdom.hostreadyllc.chatgpt.site"
+		]
+	},
+	"backgroundColor": "#150806",
+	"android": {
+		"backgroundColor": "#150806",
+		"allowMixedContent": false
+	},
+	"ios": {
+		"backgroundColor": "#150806",
+		"contentInset": "always",
+		"preferredContentMode": "mobile"
+	},
+	"plugins": {
+		"StatusBar": {
+			"style": "DARK",
+			"backgroundColor": "#150806",
+			"overlaysWebView": false
+		}
+	}
+}
