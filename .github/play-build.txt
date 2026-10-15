@@ -1,0 +1,3 @@
+Google Play build trigger.
+Editing this file and pushing to main starts a new signed .aab build.
+Last requested: 2026-10-15 (first Play build)
