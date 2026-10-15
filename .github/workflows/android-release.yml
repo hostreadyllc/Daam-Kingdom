@@ -1,0 +1,170 @@
+name: Android production release
+
+# Builds the signed Google Play App Bundle (.aab) on every push to main and
+# publishes it on the repo's Releases page. Needs one repository secret:
+#   UPLOAD_KEYSTORE_PASSWORD  - unlocks signing/upload-keystore.jks.enc
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: true
+
+jobs:
+  build-signed-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      ok: ${{ steps.secret.outputs.ok }}
+      build: ${{ steps.ver.outputs.build }}
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - name: Check signing secret
+        id: secret
+        env:
+          PW: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$PW" ]; then
+            echo "::warning title=Play bundle skipped::Add the UPLOAD_KEYSTORE_PASSWORD repository secret to build the signed .aab."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.secret.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v5
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+
+      - name: Version
+        if: steps.secret.outputs.ok == 'true'
+        id: ver
+        run: |
+          echo "build=$((10 + ${{ github.run_number }}))" >> "$GITHUB_OUTPUT"
+          echo "version=$(grep -oE 'versionName "[^"]+"' android/app/build.gradle | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+
+      - name: Install native Capacitor dependencies
+        if: steps.secret.outputs.ok == 'true'
+        run: >-
+          npm install --prefix deps --no-package-lock
+          @capacitor/android@8.5.2
+          @capacitor/core@8.5.2
+          @capacitor/app@8.1.1
+          @capacitor/haptics@8.0.2
+          @capacitor/status-bar@8.0.3
+
+      - name: Restore upload key
+        if: steps.secret.outputs.ok == 'true'
+        env:
+          PW: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: |
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+            -in signing/upload-keystore.jks.enc -out "$RUNNER_TEMP/upload.jks" -pass env:PW
+
+      - name: Build signed App Bundle and release APK
+        if: steps.secret.outputs.ok == 'true'
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ steps.ver.outputs.build }}
+          DAAM_KEYSTORE_FILE: ${{ runner.temp }}/upload.jks
+          DAAM_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          DAAM_KEY_ALIAS: upload
+          DAAM_KEY_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+        run: ./gradlew bundleRelease assembleRelease --no-daemon
+
+      - name: Verify signature
+        if: steps.secret.outputs.ok == 'true'
+        run: |
+          jarsigner -verify -verbose -certs android/app/build/outputs/bundle/release/app-release.aab | grep -m1 "CN=Host Ready LLC" \
+            || { echo "::error::Bundle is not signed with the upload key"; exit 1; }
+
+      - name: Name files
+        if: steps.secret.outputs.ok == 'true'
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/bundle/release/app-release.aab "out/DaamKingdom-PlayStore-v${{ steps.ver.outputs.version }}-code${{ steps.ver.outputs.build }}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "out/DaamKingdom-v${{ steps.ver.outputs.version }}-code${{ steps.ver.outputs.build }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.secret.outputs.ok == 'true'
+        with:
+          name: release-files
+          path: out/
+          retention-days: 30
+
+  # Opens the signed release build on an Android emulator before publishing.
+  smoke-test:
+    needs: build-signed-aab
+    if: needs.build-signed-aab.outputs.ok == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: out
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bash .github/scripts/smoke-test.sh "$(ls out/*.apk | head -n 1)" com.hostready.daamkingdom
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-check
+          path: |
+            screen.png
+            logcat.txt
+
+  publish:
+    needs: [build-signed-aab, smoke-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: out
+      - uses: actions/download-artifact@v4
+        with:
+          name: emulator-check
+          path: check
+      - name: Publish to Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: play-build-${{ needs.build-signed-aab.outputs.build }}
+          name: Play build ${{ needs.build-signed-aab.outputs.build }} (v${{ needs.build-signed-aab.outputs.version }})
+          make_latest: true
+          files: |
+            out/*
+            check/screen.png
+          body: |
+            **Upload to Google Play:** the `.aab` file (version code ${{ needs.build-signed-aab.outputs.build }}).
+            The `.apk` is the same signed build for installing directly on a phone.
+            This build was opened on an Android emulator before publishing (`screen.png`).
