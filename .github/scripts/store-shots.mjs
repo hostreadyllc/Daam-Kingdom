@@ -78,51 +78,96 @@ try {
   await page.waitForTimeout(800);
   await shotBoth(page, '05-start');
 
-  let mine = null, turn = 0, captured = 0;
-  const start = await squares(page);
-  const startCount = { p1: start.filter(s => s.piece.includes('p1')).length, p2: start.filter(s => s.piece.includes('p2')).length };
-  for (turn = 1; turn <= 40; turn++) {
-    if (!(await waitMyTurn(page))) break;
-    await page.waitForTimeout(600);
-    const sq = await squares(page);
-    // Prefer pieces that must capture (the game may mark them); otherwise any of mine.
-    const candidates = sq.filter(s => s.piece && (!mine || s.piece.includes(mine)));
-    // Forward-most pieces first makes the game develop; shuffle a little for variety.
-    candidates.sort((a, b) => (a.i - b.i) * (mine === 'p1' ? 1 : -1) + (Math.random() - 0.5) * 6);
-    let moved = false;
-    for (const c of candidates) {
-      const { lit, after } = await trySelect(page, c.i);
-      if (!lit.length) continue;
-      if (!mine) mine = c.piece.includes('p1') ? 'p1' : 'p2';
-      if (turn === 3) {
-        note('selectedClasses', { piece: after[c.i].cls, lit: lit.map(l => l.cls) });
-        await shotBoth(page, '06-selected');
+  // I play gold (p1, bottom, moving up). Simple 1-ply strategy: capture when possible,
+  // promote, and avoid landing where a bot piece can jump me next turn.
+  const ME = 'p1', BOT = 'p2';
+  const rc = (i) => [i >> 3, i & 7];
+  const at = (r, c) => (r < 0 || r > 7 || c < 0 || c > 7) ? null : r * 8 + c;
+  function danger(board, d) {
+    const [r, c] = rc(d);
+    for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+      const o = at(r + dr, c + dc), land = at(r - dr, c - dc);
+      if (o === null || land === null) continue;
+      const p = board[o];
+      if (!p.includes(BOT) || board[land]) continue;
+      // Bot men move down the board (increasing row): they jump me from the row above.
+      if (p.includes('king') || dr === -1) return true;
+    }
+    return false;
+  }
+  function score(board, src, dst) {
+    const b = board.slice(); const [r0, c0] = rc(src), [r1, c1] = rc(dst);
+    let s = Math.random() * 0.5;
+    if (Math.abs(r1 - r0) >= 2) { // capture: clear the jumped piece(s) on the diagonal
+      const dr = Math.sign(r1 - r0), dc = Math.sign(c1 - c0);
+      for (let k = 1; k < Math.abs(r1 - r0); k++) b[at(r0 + dr * k, c0 + dc * k)] = '';
+      s += 12;
+    }
+    b[dst] = b[src]; b[src] = '';
+    if (r1 === 0 && !board[src].includes('king')) s += 7;
+    if (danger(b, dst)) s -= 9;
+    if (r0 === 7 && !board[src].includes('king')) s -= 1.5; // keep the back row
+    if (c1 === 0 || c1 === 7) s += 1;
+    // Don't leave a friend exposed by moving away
+    for (let i = 0; i < 64; i++) if (b[i].includes(ME) && i !== dst && danger(b, i) && !danger(board, i)) s -= 5;
+    return s;
+  }
+
+  let best = { margin: -99 };
+  for (let game = 1; game <= 2; game++) {
+    let turn = 0;
+    for (turn = 1; turn <= 45; turn++) {
+      if (!(await waitMyTurn(page))) break;
+      await page.waitForTimeout(500);
+      const sq = await squares(page);
+      const board = sq.map(s => s.piece);
+      const options = [];
+      for (const c of sq.filter(s => s.piece.includes(ME))) {
+        const { lit } = await trySelect(page, c.i);
+        for (const l of lit) options.push({ src: c.i, dst: l.i, s: score(board, c.i, l.i) });
       }
-      // Prefer a capture: a destination two rows away
-      const jump = lit.find(l => Math.abs(Math.floor(l.i / 8) - Math.floor(c.i / 8)) >= 2);
-      const dest = jump || lit[Math.floor(Math.random() * lit.length)];
-      await page.locator('.board .square').nth(dest.i).click();
+      if (!options.length) { note('noMove', { game, turn }); break; }
+      options.sort((a, b) => b.s - a.s);
+      const mv = options[0];
+      for (let k = 0; k < 2; k++) {
+        const sel = (await squares(page))[mv.src].cls.includes('selected');
+        if (sel) break;
+        await page.locator('.board .square').nth(mv.src).click();
+        await page.waitForTimeout(400);
+      }
+      if (game === 1 && turn === 3) await shotAt(page, '06-selected-cards', '.player-card.opponent', 8);
+      await page.locator('.board .square').nth(mv.dst).click();
       await page.waitForTimeout(900);
-      // Multi-jumps: keep clicking lit squares while it's still my turn and something is lit
-      for (let k = 0; k < 4; k++) {
+      // Multi-jumps: keep going while squares are still lit
+      for (let k = 0; k < 5; k++) {
         const s2 = await squares(page);
-        const more = s2.filter(s => s.cls.length > 2 && !s.piece);
-        if (!more.length || !/your turn/i.test(await statusText(page))) break;
+        const more = s2.filter(s => s.cls.includes('hint'));
+        if (!more.length) break;
         await page.locator('.board .square').nth(more[0].i).click();
         await page.waitForTimeout(700);
       }
-      moved = true; break;
+      // Wait for the bot's reply so the board shows a settled position on my turn
+      await waitMyTurn(page, 12000);
+      await page.waitForTimeout(500);
+      const now = (await squares(page)).map(s => s.piece);
+      const me = now.filter(p => p.includes(ME)).length, bot = now.filter(p => p.includes(BOT)).length;
+      const kings = now.filter(p => p.includes(ME) && p.includes('king')).length;
+      const tag = `g${game}-t${String(turn).padStart(2, '0')}-me${me}-bot${bot}${kings ? '-king' + kings : ''}`;
+      note('turn', tag);
+      if (turn >= 4 && me >= bot) await shotAt(page, `20-${tag}`, '.player-card.opponent', 8);
+      if (me - bot > best.margin) best = { margin: me - bot, tag };
     }
-    if (!moved) { note('noMove', { turn, status: await statusText(page) }); break; }
-    const now = await squares(page);
-    const theirs = mine === 'p1' ? 'p2' : 'p1';
-    const left = now.filter(s => s.piece.includes(theirs)).length;
-    if (left < startCount[theirs] - captured) { captured = startCount[theirs] - left; await shotBoth(page, `07-capture-t${turn}`); }
-    if (now.some(s => /king|crown|queen/i.test(s.piece))) { await shotBoth(page, `08-king-t${turn}`); }
-    if ([6, 12, 20, 30].includes(turn)) await shotBoth(page, `09-turn${turn}`);
+    await page.waitForTimeout(1500);
+    const end = await statusText(page);
+    const body = await page.evaluate(() => document.body.innerText);
+    note('gameOver', { game, turn, won: /ash wins|you win/i.test(body) });
+    await shotAt(page, `30-end-g${game}`, '.player-card.opponent', 8);
+    if (/ash wins|you win/i.test(body)) break;
+    // Rematch
+    if (!(await page.getByRole('button', { name: /rematch/i }).first().click({ timeout: 5000 }).then(() => true, () => false))) break;
+    await page.waitForTimeout(3000);
   }
-  note('summary', { mine, turns: turn, captured });
-  await shotBoth(page, '10-final');
+  note('best', best);
   // Quick chat
   await page.getByText('Well played!', { exact: true }).first().click({ timeout: 3000 }).catch(() => {});
   await page.waitForTimeout(1200);
