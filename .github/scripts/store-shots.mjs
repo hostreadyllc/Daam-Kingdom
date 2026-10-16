@@ -53,7 +53,7 @@ async function waitMyTurn(page, ms = 20000) {
 // Click one of my pieces; return the squares that light up as destinations.
 async function trySelect(page, idx) {
   const before = await squares(page);
-  await page.locator('.board .square').nth(idx).click();
+  await page.locator('.board .square').nth(idx).click({ timeout: 3000 });
   await page.waitForTimeout(350);
   const after = await squares(page);
   const lit = after.filter((s, k) => s.i !== idx && s.cls.length > before[k].cls.length && !s.piece);
@@ -114,7 +114,7 @@ try {
   }
 
   let best = { margin: -99 };
-  for (let game = 1; game <= 2; game++) {
+  for (let game = 1; game <= 1; game++) {
     let turn = 0;
     for (turn = 1; turn <= 45; turn++) {
       if (!(await waitMyTurn(page))) break;
@@ -122,8 +122,9 @@ try {
       const sq = await squares(page);
       const board = sq.map(s => s.piece);
       const options = [];
+      if (await page.locator('.board .square[disabled]').count() > 40) break; // game over
       for (const c of sq.filter(s => s.piece.includes(ME))) {
-        const { lit } = await trySelect(page, c.i);
+        const { lit } = await trySelect(page, c.i).catch(() => ({ lit: [] }));
         for (const l of lit) options.push({ src: c.i, dst: l.i, s: score(board, c.i, l.i) });
       }
       if (!options.length) { note('noMove', { game, turn }); break; }
@@ -152,9 +153,10 @@ try {
       const now = (await squares(page)).map(s => s.piece);
       const me = now.filter(p => p.includes(ME)).length, bot = now.filter(p => p.includes(BOT)).length;
       const kings = now.filter(p => p.includes(ME) && p.includes('king')).length;
+      if (bot === 0) { await page.waitForTimeout(2000); await shotAt(page, '31-win', '.player-card.opponent', 8); break; }
       const tag = `g${game}-t${String(turn).padStart(2, '0')}-me${me}-bot${bot}${kings ? '-king' + kings : ''}`;
       note('turn', tag);
-      if (turn >= 4 && me >= bot) await shotAt(page, `20-${tag}`, '.player-card.opponent', 8);
+      if (turn >= 18 && me >= bot) await shotAt(page, `20-${tag}`, '.player-card.opponent', 8);
       if (me - bot > best.margin) best = { margin: me - bot, tag };
     }
     await page.waitForTimeout(1500);
