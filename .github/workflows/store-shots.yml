@@ -26,7 +26,7 @@ jobs:
           npx playwright install --with-deps chromium
           sudo apt-get install -y fonts-noto-core fonts-noto-ui-core >/dev/null || true
       - name: Capture
-        run: node .github/scripts/store-shots.mjs store/raw
+        run: node .github/scripts/privacy-check.mjs
       - name: Commit screenshots
         if: always()
         run: |
