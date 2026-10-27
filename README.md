@@ -17,3 +17,10 @@ publishes both on the repo's **Releases** page:
 Signing uses the upload key in `signing/upload-keystore.jks.enc`, unlocked by the
 repository secret `UPLOAD_KEYSTORE_PASSWORD`. Each build gets a higher version code
 automatically.
+
+
+## Privacy policy
+
+[`docs/privacy.html`](docs/privacy.html) — for package `com.hostready.daamkingdom`.
+Once GitHub Pages is on (Settings → Pages → branch `main`, folder `/docs`), it is live at
+https://hostreadyllc.github.io/Daam-Kingdom/privacy.html
