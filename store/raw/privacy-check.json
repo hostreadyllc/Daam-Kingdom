@@ -1,0 +1,25 @@
+{
+ "links": [
+  {
+   "t": "Privacy",
+   "h": "https://daam-kingdom.hostreadyllc.chatgpt.site/privacy"
+  },
+  {
+   "t": "Support",
+   "h": "https://daam-kingdom.hostreadyllc.chatgpt.site/support"
+  }
+ ],
+ "Privacy": {
+  "url": "https://daam-kingdom.hostreadyllc.chatgpt.site/privacy",
+  "status": 200,
+  "text": "← Daam Kingdom\nPrivacy Policy\n\nEffective date: 3 October 2026\n\nDaam Kingdom is operated by HostReady LLC. This policy explains how information is handled when you use the Daam Kingdom website or mobile application.\n\nInformation we process\nUsername: the display name you enter for a match.\nGame information: room code, board position, messages selected from the preset list, match status and reconnection token.\nTechnical information: hosting and security providers may process IP address, device type, browser information and request logs to operate and protect the service.\nHow information is used\n\nInformation is used only to create multiplayer rooms, synchronize matches, reconnect players, operate the Daam Bot, prevent abuse and maintain service reliability. Daam Kingdom does not sell personal information, display third-party advertising or use game information for behavioural advertising.\n\nStorage and retention\n\nInactive room records are automatically removed after approximately 24 hours. Security and infrastructure logs may be retained for a limited period by our hosting providers. Do not use your legal name as your game username if you prefer to remain anonymous.\n\nSharing\n\nInformation is processed by service providers needed to host and secure the game. It is not shared with data brokers or advertisers. Information may be disclosed when required by applicable law.\n\nChildren\n\nThe game does not request a date of birth, contact list, precise location, photographs or payment information. Parents or guardians should supervise children and help them choose a non-identifying username.\n\nYour choices\n\nYou may stop using the game at any time. Because no user account is created, room information cannot normally be linked back to you after the room expires. For a privacy question or deletion request concerning an active room, contact us with the room code.\n\nContact\n\nEmail: info@hostreadyai.com\nWebsite: hostreadyai.com"
+ },
+ "Support": {
+  "url": "https://daam-kingdom.hostreadyllc.chatgpt.site/support",
+  "status": 200,
+  "text": "← Daam Kingdom\nDaam Kingdom Support\nQuick help\nTap Create Room, then share the six-character code with another player.\nIf nobody joins within 10 seconds, Daam Bot joins automatically.\nTap one of your pieces, then tap a glowing destination square.\nCaptures are compulsory. Continue with the same piece when another jump is available.\nMusic begins after Create Room or Join Room is tapped. Use the music and sound buttons to control audio.\nIf a connection drops, return within 60 seconds to resume the match.\nContact support\n\nWhen reporting a problem, include your device model, operating-system version and room code. Do not send passwords or payment information.\n\nEmail: info@hostreadyai.com\nWebsite: hostreadyai.com\n\nService URLs\n\nPrivacy Policy"
+ },
+ "https://hostreadyllc.github.io/party-lights/privacy.html": 404,
+ "https://hostreadyllc.github.io/Dice-Roll-Virtual/privacy/": 404,
+ "https://hostreadyllc.github.io/Daam-Kingdom/privacy.html": 404
+}
